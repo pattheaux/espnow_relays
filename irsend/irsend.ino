@@ -25,9 +25,13 @@
 #include "PinDefinitionsAndMore.h"
 #include <IRremote.hpp> // include the library
 
-void setup() {
-    pinMode(LED_BUILTIN, OUTPUT);
+uint8_t once = 0;
 
+void setup() {
+    //pinMode(LED_BUILTIN, OUTPUT);
+
+    pinMode(33,OUTPUT);
+  
     Serial.begin(115200);
 
     // Just to know which program is running on my Arduino
@@ -48,17 +52,44 @@ void setup() {
  * and a variable 8 bit command.
  * There are exceptions like Sony and Denon, which have 5 bit address.
  */
-uint8_t sCommand = 0x40;
+uint8_t commands[] = {
+  // startwars light
+  0x40, //startwars light toggle
+
+  // room leds
+  0x0D, // on
+  0x1F, // off
+  0x4D, // color flash
+  0x00, // strobe
+  0x09, // brighter
+  0x1D, // darker
+
+  0x15, // white
+  0x11, // blue1
+  0x16, // blue2
+  0x04, // purple1
+  0x0E, // purple2
+  0x0F, // pink
+  0x1B, // green
+  0x19, // red
+  0x40, // orange
+  0x1C, // yellow
+};
+
+uint8_t sCommand = 0x0d; //0x40;  // starwars lights on/off
 uint8_t sRepeats = 4;
-uint8_t once = 0;
+
 
 void loop() {
     if(once) {
-      delay(1000);
+      digitalWrite(33,0);
+      delay(500);
+      digitalWrite(33,1);
+      delay(500);
       return;
     }
 
-    once = true;
+    //once = true;
     /*
      * Print current send values
      */
@@ -97,5 +128,5 @@ void loop() {
         sRepeats = 4;
     }
 
-    delay(2000);  // delay must be greater than 5 ms (RECORD_GAP_MICROS), otherwise the receiver sees it as one long signal
+    delay(1000);  // delay must be greater than 5 ms (RECORD_GAP_MICROS), otherwise the receiver sees it as one long signal
 }

@@ -1,33 +1,9 @@
-/*
-  Rui Santos
-  Complete project details at https://RandomNerdTutorials.com/esp-now-esp8266-nodemcu-arduino-ide/
-  
-  Permission is hereby granted, free of charge, to any person obtaining a copy
-  of this software and associated documentation files.
-  
-  The above copyright notice and this permission notice shall be included in all
-  copies or substantial portions of the Software.
-*/
-
-#include "rxrelay.h"
-
-void setup() {
-  int i;
-  // Initialize Serial Monitor
-  Serial.begin(115200);
-  Serial.println("espnow_rx starting");
-
-  rxrelay_setup();
-}
-
-void loop() {
-  rxrelay_loop();
-}
-
-/*
+// Relay Stuff
 #include <ESP8266WiFi.h>
 #include <espnow.h>
 
+uint8_t rxrelay_ir_send = 0;
+uint8_t rxrelay_ir_command = 0x00;
 
 static const uint8_t D0   = 16;
 static const uint8_t D1   = 5;
@@ -50,14 +26,14 @@ static const uint8_t relay_pins[] = { D5, D6, D7, D8 };
 typedef struct button {
   uint8_t button;
   uint8_t bstate;
+  unsigned long onTime;
   unsigned long lastTime;
   uint8_t value;
-  unsigned long onTime;
 } button_t;
 
 #define NBUTTONS 4
-int relay_value = 0;
-button_t buttons[NBUTTONS] = { { D1, 0, 0, 0, 0 }, { D2, 0, 0, 0, 0 }, { D3, 0, 0, 0, 0 }, { D4, 0, 0, 0, 0 } };
+static int relay_value = 0;
+static button_t buttons[NBUTTONS] = { { D1, 0, 0, 0, 0 }, { D2, 0, 0, 0, 0 }, { D3, 0, 0, 0, 0 }, { D4, 0, 0, 0, 0 } };
 
 // Structure example to receive data
 // Must match the sender structure
@@ -68,25 +44,47 @@ typedef struct struct_message {
   int data[32];
 } struct_message;
 
+typedef struct delayed {
+  uint8_t relay;
+  long runAt;
+} delayed_t;
 
-unsigned long timerDelay = 1000;
+static delayed_t delayed = { -1, 0 };
+
+static unsigned long timerDelay = 1000;
 
 // Create a struct_message called myData
-struct_message myData;
+static struct_message myData;
 
-char first = 1;
-char blink = 0;
+static char first = 1;
+static char blink = 0;
 
-unsigned long buttonDisableTime = 0L;
+void rxrelay_setRelay(uint8_t relay, uint8_t value, int mode) {
+  if(mode == 1) {
+    // IR LEDs. Value is command
+    Serial.println("LED COMMAND");
+    rxrelay_ir_command = value;
+    rxrelay_ir_send = 1;
+    return;
+  }
 
-void setRelay(uint8_t relay, uint8_t value) {
   buttons[relay].value = value;
   digitalWrite(relay_pins[relay], value?HIGH:LOW);
-  buttonDisableTime = millis() + 1000;
+
+  if(value > 1) {
+    // Momentary Relay, value is the delay in ms before turning off
+    Serial.print("delay off for relay ");
+    Serial.print(relay);
+    Serial.print(" after ");
+    Serial.println(value);
+
+    delayed.relay = relay;
+    delayed.runAt = millis() + value;
+  }
 }
 
 // Callback function that will be executed when data is received
-void OnDataRecv(uint8_t * mac, uint8_t *incomingData, uint8_t len) {
+static void OnDataRecv(uint8_t * mac, uint8_t *incomingData, uint8_t len) {
   memcpy(&myData, incomingData, sizeof(myData));
   Serial.print("Bytes received: ");
   Serial.println(len);
@@ -100,8 +98,9 @@ void OnDataRecv(uint8_t * mac, uint8_t *incomingData, uint8_t len) {
 
   uint8_t relay = myData.relay; //relay_pins[myData.relay];
   int value = myData.value;
+  int mode = myData.data[0];
 
-  setRelay(relay,value);
+  rxrelay_setRelay(relay,value,mode);
 
   //if(!blink) {
     //blink = 1;
@@ -115,11 +114,10 @@ void OnDataRecv(uint8_t * mac, uint8_t *incomingData, uint8_t len) {
 
 }
  
-void setup() {
+void rxrelay_setup() {
   int i;
   // Initialize Serial Monitor
-  Serial.begin(115200);
-  Serial.println("starting");
+  Serial.println("rxrelay starting");
 
   // Set device as a Wi-Fi Station
   WiFi.mode(WIFI_STA);
@@ -142,33 +140,44 @@ void setup() {
   for(i=0;i<NBUTTONS;i++) {
     pinMode(buttons[i].button, INPUT_PULLUP);
   }
+
+  //ir_setup();
 }
 
-void loop() {
+static void loop_button(button_t *btn, int i);
+
+void rxrelay_loop() {
   int i;
 
   if(first) {
     first = 0;
-    //digitalWrite(LED_BUILTIN, LEDOFF);
-    Serial.println("rx started");
+    Serial.println("rxrelay started");
+    //ir_send_command = 1;
     return;
   }
-  
+
+  if((delayed.runAt > 0) && (delayed.runAt < millis())) {
+    Serial.print("Delay clear relay ");
+    Serial.println(delayed.relay);
+
+    rxrelay_setRelay(delayed.relay,0,0);
+    delayed.runAt = 0;
+  }
+
+  //ir_loop();
+
   for(i=0;i<NBUTTONS;i++) {
     loop_button(buttons+i,i);
   }
 }
 
-void loop_button(button_t *btn, int i) {
+static void loop_button(button_t *btn, int i) {
 
   uint8_t mode = btn->bstate;
   uint8_t bstate = digitalRead(btn->button);
 
-  if(buttonDisableTime > millis()) {
-    return;
-  }
-
   if ((mode == 1) && ((millis() - btn->lastTime) > timerDelay) && (bstate)) {
+    // Debounce the release
     Serial.print("disarm ");
     Serial.println(i);
     btn->bstate = 0;
@@ -179,7 +188,7 @@ void loop_button(button_t *btn, int i) {
   if((mode == 0) && (!bstate)) {
     Serial.println("press");
     btn->bstate = 3;
-    btn->onTime = millis() + 200;
+    btn->onTime = millis() + 50;
     return;
   }
 
@@ -198,9 +207,26 @@ void loop_button(button_t *btn, int i) {
     Serial.print(i);
     Serial.print("=");
     Serial.println(!btn->value);
-    setRelay(i, !btn->value);
+    rxrelay_setRelay(i, !btn->value, 0);
+
+    #ifdef TESTBUTTONS
+    if(i==0) {
+      // Test IR
+      if(sCommand == 0x0D) sCommand = 0x1F;
+      else sCommand = 0x0D;
+
+      ir_send_command = 1;
+    } else if(i==1) {
+      // Test momentary
+      rxrelay_setRelay(2, 200, 0);
+    }
+    #endif
+    if(i==3) {
+      // Test momentary
+      Serial.println("TEST momentary");
+      rxrelay_setRelay(3, 200, 0);
+    }
+
     return;
   }
-
 }
-*/
