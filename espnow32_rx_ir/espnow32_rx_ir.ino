@@ -21,7 +21,8 @@ uint8_t sCommand = 0x0D; // room leds on
 
 #include "rxrelay.h"
 
-static uint8_t relay_pins[] = { 16, 17, 18, 19 };
+static uint8_t relay_pins[] = { 26, 18, 19, 23, 33, 0xFF };
+static uint8_t buttons[] = { 22, 21, 17, 16, 0xFF };
 
 void setup() {
   int i;
@@ -29,10 +30,10 @@ void setup() {
   Serial.begin(115200);
   Serial.println("starting");
 
-  rxrelay_set_usebuttons(0);
   rxrelay_set_relaypins(relay_pins);
+  rxrelay_set_buttons(buttons);
   rxrelay_setup();
-  ir_setup();
+  //ir_setup();
 }
 
 void loop() {

@@ -76,7 +76,7 @@ uint8_t commands[] = {
   0x1C, // yellow
 };
 
-uint8_t sCommand = 0x0d; //0x40;  // starwars lights on/off
+uint8_t sCommand = 0x40;  // starwars lights on/off
 uint8_t sRepeats = 4;
 
 

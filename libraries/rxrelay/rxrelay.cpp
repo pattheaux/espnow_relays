@@ -1,6 +1,11 @@
 // Relay Stuff
+#ifdef ESP32
+#include <esp_now.h>
+#include <WiFi.h>
+#else
 #include <ESP8266WiFi.h>
 #include <espnow.h>
+#endif
 
 uint8_t rxrelay_ir_send = 0;
 uint8_t rxrelay_ir_command = 0x00;
@@ -21,7 +26,8 @@ static const uint8_t LEDOFF = HIGH;
 static const uint8_t LEDON = LOW;
 
 #define NRELAY 4
-static const uint8_t relay_pins[] = { D5, D6, D7, D8 };
+static uint8_t default_relay_pins[] = { D5, D6, D7, D8, 0xFF };
+static uint8_t *relay_pins = default_relay_pins;
 
 typedef struct button {
   uint8_t button;
@@ -32,8 +38,9 @@ typedef struct button {
 } button_t;
 
 #define NBUTTONS 4
+static uint8_t usebuttons = 1;
 static int relay_value = 0;
-static button_t buttons[NBUTTONS] = { { D1, 0, 0, 0, 0 }, { D2, 0, 0, 0, 0 }, { D3, 0, 0, 0, 0 }, { D4, 0, 0, 0, 0 } };
+static button_t buttons[] = { { D1, 0, 0, 0, 0 }, { D2, 0, 0, 0, 0 }, { D3, 0, 0, 0, 0 }, { D4, 0, 0, 0, 0 }, { 0xFF, 0, 0, 0, 0 }, { 0xFF, 0, 0, 0, 0 } };
 
 // Structure example to receive data
 // Must match the sender structure
@@ -58,6 +65,22 @@ static struct_message myData;
 
 static char first = 1;
 static char blink = 0;
+
+void rxrelay_set_relaypins(uint8_t *pins) {
+  relay_pins = pins;
+}
+void rxrelay_set_buttons(uint8_t *buttonpins) {
+  int i;
+  for(i=0;i<NBUTTONS;i++) {
+    buttons[i].button = buttonpins[i];
+    if(buttonpins[i] == 0xFF) {
+      break;
+    }
+  }
+}
+void rxrelay_set_usebuttons(uint8_t use) {
+  usebuttons = use;
+}
 
 void rxrelay_setRelay(uint8_t relay, uint8_t value, int mode) {
   if(mode == 1) {
@@ -84,7 +107,12 @@ void rxrelay_setRelay(uint8_t relay, uint8_t value, int mode) {
 }
 
 // Callback function that will be executed when data is received
-static void OnDataRecv(uint8_t * mac, uint8_t *incomingData, uint8_t len) {
+#ifdef ESP32
+static void OnDataRecv(const esp_now_recv_info_t * mac, const uint8_t *incomingData, int len)
+#else
+static void OnDataRecv(uint8_t * mac, uint8_t *incomingData, uint8_t len)
+#endif
+{
   memcpy(&myData, incomingData, sizeof(myData));
   Serial.print("Bytes received: ");
   Serial.println(len);
@@ -130,18 +158,24 @@ void rxrelay_setup() {
   
   // Once ESPNow is successfully Init, we will register for recv CB to
   // get recv packer info
+#ifndef ESP32
   esp_now_set_self_role(ESP_NOW_ROLE_SLAVE);
+#endif
   esp_now_register_recv_cb(OnDataRecv);
 
-  //pinMode(LED_BUILTIN, OUTPUT);
-  for(i=0;i<NRELAY;i++) {
+  for(i=0;;i++) {
+Serial.print("relay output "); Serial.print(i); Serial.print(" "); Serial.println(relay_pins[i]==0xFF);
+    if(relay_pins[i] == 0xFF) break;
     pinMode(relay_pins[i], OUTPUT);
   }
-  for(i=0;i<NBUTTONS;i++) {
-    pinMode(buttons[i].button, INPUT_PULLUP);
+  if(!usebuttons) {
+    return;
   }
 
-  //ir_setup();
+  for(i=0;i<NBUTTONS;i++) {
+    if(buttons[i].button == 0xFF) break;
+    pinMode(buttons[i].button, INPUT_PULLUP);
+  }
 }
 
 static void loop_button(button_t *btn, int i);
@@ -164,7 +198,9 @@ void rxrelay_loop() {
     delayed.runAt = 0;
   }
 
-  //ir_loop();
+  if(!usebuttons) {
+    return;
+  }
 
   for(i=0;i<NBUTTONS;i++) {
     loop_button(buttons+i,i);
@@ -175,6 +211,8 @@ static void loop_button(button_t *btn, int i) {
 
   uint8_t mode = btn->bstate;
   uint8_t bstate = digitalRead(btn->button);
+
+  if (btn->button == 0xFF) return;
 
   if ((mode == 1) && ((millis() - btn->lastTime) > timerDelay) && (bstate)) {
     // Debounce the release

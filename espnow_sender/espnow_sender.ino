@@ -29,6 +29,7 @@ static const uint8_t BUTTON  = D1;
 uint8_t mac0[] = {0xc4, 0xd8, 0xd5, 0x13, 0x3d, 0xfc}; // orig box 1 4 outlets
 uint8_t mac1[] = {0x4c, 0xeb, 0xd6, 0x1f, 0x50, 0x5c}; // 2 outlets, 1 contact (vpin), 1 IR (room leds)
 uint8_t mac2[] = {0xbc, 0xdd, 0xc2, 0x79, 0x92, 0x2d}; // orig box 2 3 outlets, 1 contact (crystal castles)
+uint8_t mac3[] = {0x78, 0xee, 0x4c, 0x01, 0x5a, 0xc8}; // ESP32 box. qbert, starwars, starwars leds
 
 uint8_t macx[] = {0xc4, 0xd8, 0xd5, 0x0e, 0xbf, 0xc1}; // dead
 
@@ -40,6 +41,7 @@ uint8_t *macs[] = {
   mac0,
   mac1,
   mac2,
+  mac3,
   NULL
 };
 
@@ -70,8 +72,13 @@ step_t steps[] = {
 
   { 1, 0, 1, 0, RELAY }, // BOP  //{ 1, 2, 250, 0, RELAY }, // BOP, Vpin
 
-  //{ 2, 0, 1, 0 }, { 2, 1, 1, 0 }, 1ups
-  { 2, 2, 1, 3000, RELAY }, // Crystal Castles
+  { 3, 0, 1, 0, RELAY }, // Disco2
+  { 3, 1, 1, 0, RELAY }, // Ghost2
+
+  { 3, 2, 1, 0, RELAY }, // qbert
+  { 2, 2, 1, 1, RELAY }, // Crystal Castles
+
+  { 3, 3, 0x40, 0, IRLED}, // star wars leds toggle
 
   { 1, 3, 0x0D, 0, IRLED }, { 1, 3, 0x00, 0, IRLED },
   { 1, 3, 0x04, 3000, IRLED }, // Blue
@@ -93,12 +100,40 @@ step_t off_steps[] = {
 
   { 2, 0, 0, 0, RELAY }, { 2, 1, 0, 0, RELAY }, // 1ups
 
+  { 3, 0, 0, 0, RELAY }, // Disco2
+  { 3, 1, 0, 0, RELAY }, // Ghost2
+  { 3, 3, 250, 1, RELAY }, // qbert button
+
   { 1, 3, 0x1F, 0, IRLED}, // Room LEDS off
 
+  { 3, 3, 0x40, 0, IRLED}, // star wars leds toggle
+
   { 2, 2, 0, 2000, RELAY }, // Crystal Castles off
+  { 3, 2, 0, 2000, RELAY }, // qbert off
 
   { 0xFF, 0xFF, 0xFF, 0xFF } // Done
 };
+
+step_t b1_steps[] = {
+  { 3, 3, 0x40, 0, IRLED }, // star wars leds toggle
+
+  { 3, 0, 1, 0, RELAY }, // Disco2
+  { 3, 1, 1, 0, RELAY }, // Ghost2
+  { 3, 2, 1, 0, RELAY }, // qbert
+
+  { 0xFF, 0xFF, 0xFF, 0xFF } // Done
+};
+step_t b1_steps_off[] = {
+  { 3, 0, 0, 0, RELAY }, // Disco2
+  { 3, 1, 0, 0, RELAY }, // Ghost2
+  { 3, 3, 250, 1, RELAY }, // qbert button
+  { 3, 2, 0, 5000, RELAY }, // qbert off
+  { 3, 3, 0x40, 0, IRLED }, // star wars leds toggle
+
+  { 0xFF, 0xFF, 0xFF, 0xFF } // Done
+};
+
+/*
 
 step_t b1_steps[] = {
   { 1, 2, 250, 10 }, // Vpin power button
@@ -112,6 +147,7 @@ step_t b1_steps_off[] = {
 
   { 0xFF, 0xFF, 0xFF, 0xFF } // Done
 };
+*/
 
 // Structure example to send data
 // Must match the receiver structure
