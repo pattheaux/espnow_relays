@@ -1,0 +1,26 @@
+
+                ESP32 Mini
+                -----------------
+               |                 |
+               |GND -----------------
+               |                 |   |
+               |                 |   B1
+               |                 |   |
+               |                 |   |
+               |TDI D17 -------------
+   1k optional |                 |
+   --/\/\/\----|D4  D16 -------------
+  |            |                 |   | 
+  -            |                 |  Btn 
+  A LED        |                 |   |
+  |            |                 |   |
+   -------------------- 3.3 --------- 
+               |                 |   
+               |                 |   
+                -----------------
+
+Main button has an internal pulldown
+Other buttons have internal pullups
+
+https://www.amazon.com/dp/B07BK435ZW
+HiLetgo 3pcs ESP32 Mini ESP-32 Development Board WLAN WiFi Bluetooth IoT Development Board          

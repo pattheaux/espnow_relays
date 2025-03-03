@@ -1,0 +1,23 @@
+
+              Wemos D1 Mini
+                ---------
+               |      TX |
+               |      RX |
+   1k optional |      D1 |
+   --/\/\/\----|D5    D2 |
+  |            |         |
+  |      ----o-|D6    D3 |
+  |     |    | |         |
+  |    Btn   | |D7    D4 |
+  _     |    | |         |
+  A LED |    | |D8     G |--
+  |     |    | |         |  |
+   -----o------|3.3v  +5 |  |
+             |  ---------   |
+             |              |
+              ---/\/\/\-----
+                   1k
+
+The main button activates at 3.3v and has and external pulldown
+The other buttons activate at GND and have internal pullups
+

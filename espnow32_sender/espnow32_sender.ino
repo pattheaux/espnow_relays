@@ -9,6 +9,10 @@
   copies or substantial portions of the Software.
 */
 
+#ifdef ESP32
+#include <esp_now.h>
+#include <WiFi.h>
+#else
 #include <ESP8266WiFi.h>
 #include <espnow.h>
 
@@ -25,6 +29,28 @@ static const uint8_t D9   = 3;
 static const uint8_t D10  = 1;
 
 static const uint8_t BUTTON  = D1;
+#endif
+
+#ifdef ESP32
+static const uint8_t BUTTONMAIN = 16;
+static const uint8_t BUTTON1 = 17;
+static const uint8_t BUTTON2 = 18;
+static const uint8_t BUTTON3 = 19;
+static const uint8_t BUTTON4 = 14;
+static const uint8_t BUTTONLED = 4;
+
+#ifndef LED_BUILTIN
+#define LED_BUILTIN 2
+#endif
+
+#else
+static const uint8_t BUTTONMAIN = D6;
+static const uint8_t BUTTON1 = D1;
+static const uint8_t BUTTON2 = D2;
+static const uint8_t BUTTON3 = D3;
+static const uint8_t BUTTON4 = D4;
+static const uint8_t BUTTONLED = D6;
+#endif
 
 uint8_t mac0[] = {0xc4, 0xd8, 0xd5, 0x13, 0x3d, 0xfc}; // orig box 1 4 outlets
 uint8_t mac1[] = {0x4c, 0xeb, 0xd6, 0x1f, 0x50, 0x5c}; // 2 outlets, 1 contact (vpin), 1 IR (room leds)
@@ -193,7 +219,7 @@ typedef struct button {
 
 #define NBUTTONS 4
 int relay_value = 0;
-button_t buttons[NBUTTONS] = { { D1, 0, 0, 0, 0 }, { D2, 0, 0, 0, 0 }, { D3, 0, 0, 0, 0 }, { D6, 0, 0, 0, 1 } };
+button_t buttons[NBUTTONS] = { { BUTTON1, 0, 0, 0, 0 }, { BUTTON2, 0, 0, 0, 0 }, { BUTTON3, 0, 0, 0, 0 }, { BUTTONMAIN, 0, 0, 0, 1 } };
 
 uint8_t startup = 1;
 
@@ -223,7 +249,27 @@ void OnDataSent(uint8_t *mac_addr, uint8_t sendStatus) {
   if (sendStatus == 0){
     Serial.println("Delivery success");
   } else {
-    Serial.println("Delivery fail");
+    Serial.print("Delivery FAIL ");
+    for(int i=0;i<6;i++) {
+      Serial.print(mac_addr[i],HEX);
+      Serial.print(":");
+    }
+    Serial.println();
+  }
+}
+
+// Callback when data is sent
+void OnDataSent32(const uint8_t *mac_addr, esp_now_send_status_t sendStatus) {
+  Serial.print("Last Packet Send Status: ");
+  if (sendStatus == 0){
+    Serial.println("Delivery success");
+  } else {
+    Serial.print("Delivery FAIL ");
+    for(int i=0;i<6;i++) {
+      Serial.print(mac_addr[i],HEX);
+      Serial.print(":");
+    }
+    Serial.println();
   }
 }
  
@@ -233,10 +279,15 @@ void setup() {
   Serial.begin(115200);
  
   pinMode(LED_BUILTIN, OUTPUT);
-  pinMode(D5, OUTPUT);
+  pinMode(BUTTONLED, OUTPUT);
+
   for(i=0;i<NBUTTONS;i++) {
     if(buttons[i].on) {
+#ifdef ESP32
+      pinMode(buttons[i].button, INPUT_PULLDOWN);
+#else
       pinMode(buttons[i].button, INPUT);
+#endif
     } else {
       pinMode(buttons[i].button, INPUT_PULLUP);
     }
@@ -258,19 +309,39 @@ void setup() {
 
   // Once ESPNow is successfully Init, we will register for Send CB to
   // get the status of Trasnmitted packet
+#ifdef ESP32
+  Serial.println("This is an ESP32");
+  esp_now_register_send_cb(OnDataSent32);
+
+  for(i=0;macs[i]!=NULL;i++) {
+    esp_now_peer_info_t peerInfo;
+    // Register peer
+    memcpy(peerInfo.peer_addr, macs[i], 6);
+    peerInfo.channel = 0;
+    peerInfo.encrypt = false;
+  
+    // Add peer        
+    if (esp_now_add_peer(&peerInfo) != ESP_OK){
+      Serial.println("Failed to add peer");
+      return;
+    }
+  }
+#else
   esp_now_set_self_role(ESP_NOW_ROLE_CONTROLLER);
   esp_now_register_send_cb(OnDataSent);
   
   // Register peer
   esp_now_add_peer(macs[0], ESP_NOW_ROLE_SLAVE, 1, NULL, 0);
+#endif
+
 }
  
 void flash(int on, int setNext) {
-  digitalWrite(D5, on?LOW:HIGH);
+  digitalWrite(BUTTONLED, on?LOW:HIGH);
   if(!setNext) {
     mmode.nextFlash = 0;
     mmode.flash = 1;
-    if(!on) analogWrite(D5, 220); // dim
+    if(!on) analogWrite(BUTTONLED, 220); // dim
     return;
   }
 
@@ -337,14 +408,29 @@ void queueStep(step_t *step) {
   mmode.curstep_next = millis() + delay;
 }
 
+void blink() {
+  Serial.println("blink");
+  digitalWrite(LED_BUILTIN, HIGH);  // turn the LED on (HIGH is the voltage level)
+  delay(1000);                      // wait for a second
+  digitalWrite(LED_BUILTIN, LOW);   // turn the LED off by making the voltage LOW
+  delay(1000);                      // wait for a second
+}
+
 void loop() {
   int i;
 
+  //blink();
+  //return;
+
   if(startup) {
     startup = 0;
-    digitalWrite(D5, HIGH);
+    digitalWrite(BUTTONLED, HIGH);
     Serial.println("sender start");
+#ifdef ESP32
+    analogWriteResolution(BUTTONLED,8);
+#else
     analogWriteRange(255);
+#endif
     flash(0,0);
   }
 
@@ -385,7 +471,6 @@ void loop_button(button_t *btn, int i) {
     Serial.print("disarm ");
     Serial.println(i);
     btn->bstate = 0;
-
     digitalWrite(LED_BUILTIN, HIGH);
     return;
   }
@@ -393,22 +478,23 @@ void loop_button(button_t *btn, int i) {
   if((mode == 0) && (!bstate)) {
     btn->bstate = 1;
     btn->lastTime = millis();
-
     digitalWrite(LED_BUILTIN, LOW);
     btn->value = !btn->value;
-    if(btn->button == D6) {
+    if(btn->button == BUTTONMAIN) {
       memset(&mmode,0,sizeof(mmode_t));
       mmode.mode = btn->value?1:2;
       mmode.next = millis();
 
+      Serial.println("BUTTONMAIN");
       queueStep(mmode.mode==1?steps:off_steps);
 
       flash(1, 1);
-    } else if(btn->button == D1) {
+    } else if(btn->button == BUTTON1) {
       memset(&mmode,0,sizeof(mmode_t));
       mmode.mode = btn->value?1:2;
       mmode.next = millis();
 
+      Serial.println("BUTTON1");
       queueStep(mmode.mode==1?b1_steps:b1_steps_off);
 
       flash(1, 1);
@@ -436,6 +522,7 @@ void send(int module, int relay, int value, int mode) {
     Serial.print("=");
     Serial.print(myData.value);
     Serial.println();
+
     esp_now_send(macs[myData.module], (uint8_t *) &myData, sizeof(myData));
     return;
 }

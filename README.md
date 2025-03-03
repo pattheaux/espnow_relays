@@ -1,4 +1,7 @@
 
+ESP8266: Generic ESP8266 Module
+ESP32: ESP32 Dev Module (?)
+
 # Layout
 
 ## Box 1 - 4x mains
